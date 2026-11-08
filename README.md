@@ -6,8 +6,8 @@ Aplicación de escritorio local basada en Electron. Lee y actualiza los Markdown
 
 Requiere Node.js 24.22.2 o posterior de la rama 24 y npm.
 
-1. Ejecuta npm install.
-2. Ejecuta npm start.
+1. Ejecuta npm install una sola vez.
+2. Abre abrir-tareas.bat, o ejecuta npm start desde una terminal.
 3. La primera vez intenta localizar Tareas como carpeta hermana de este proyecto. Si no la encuentra, pulsa Elegir carpeta Markdown y selecciona la raíz del repositorio, la que contiene areas/.
 
 La ruta elegida se guarda en la configuración local de Electron, fuera del repositorio Markdown. En el segundo ordenador, clona ambos repositorios en ubicaciones paralelas o elige la carpeta Tareas allí también.
