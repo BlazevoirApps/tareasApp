@@ -5,7 +5,8 @@
   "main": "main.js",
   "private": true,
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "postinstall": "install-electron"
   },
   "devDependencies": {
     "electron": "^45.0.0"
