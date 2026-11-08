@@ -9,6 +9,8 @@ const AREAS = [
 const STATUSES = ["Pendientes", "En curso", "En espera", "Completadas"];
 const PRIORITIES = ["P0", "P1", "P2", "P3"];
 const state = { tasks: [], hashes: {}, repositoryPath: "", area: "all", query: "", view: "board", month: new Date(new Date().getFullYear(), new Date().getMonth(), 1) };
+let draggedTask = null;
+let suppressNextClick = false;
 const $ = selector => document.querySelector(selector);
 const board = $("#board");
 const notice = $("#notice");
@@ -92,11 +94,32 @@ function render() {
   $("#calendar-view").hidden = state.view !== "calendar";
   $("#nav-board").classList.toggle("selected", state.view === "board");
   $("#nav-calendar").classList.toggle("selected", state.view === "calendar");
+  $("#drag-hint").hidden = state.view !== "board";
   $("#view-heading").textContent = state.view === "calendar" ? "Calendario" : "Tablero";
   if (state.view === "calendar") renderCalendar(tasks);
   else renderBoard(tasks);
   $("#task-count").textContent = tasks.length + (tasks.length === 1 ? " tarea" : " tareas");
   $("#repo-path").textContent = state.repositoryPath || "Selecciona el repositorio de Markdown";
+}
+function bindDropTarget(column, status) {
+  column.addEventListener("dragover", event => {
+    if (!draggedTask) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    column.classList.add("drop-target");
+  });
+  column.addEventListener("dragleave", event => {
+    if (!column.contains(event.relatedTarget)) column.classList.remove("drop-target");
+  });
+  column.addEventListener("drop", event => {
+    event.preventDefault();
+    column.classList.remove("drop-target");
+    let payload = draggedTask;
+    try { payload = JSON.parse(event.dataTransfer.getData("text/plain")); } catch {}
+    const task = state.tasks.find(item => item.id === payload?.id && item.area === payload?.area);
+    draggedTask = null;
+    if (task) void moveTask(task, status);
+  });
 }
 function renderBoard(tasks) {
   board.replaceChildren();
@@ -105,6 +128,7 @@ function renderBoard(tasks) {
       PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority) ||
       (a.due || "9999-12-31").localeCompare(b.due || "9999-12-31"));
     const column = textNode("section", "", "column");
+    bindDropTarget(column, status);
     const heading = textNode("div", "", "column-heading");
     heading.append(textNode("h2", status), textNode("span", String(list.length), "column-count"));
     column.append(heading);
@@ -161,9 +185,33 @@ function renderCalendar(tasks) {
     undated.append(tag);
   }
 }
+async function moveTask(task, status) {
+  if (task.status === status) return;
+  try {
+    const result = await window.tareasApp.updateTask({
+      id: task.id,
+      title: task.title,
+      area: task.area,
+      priority: task.priority,
+      due: task.due || "",
+      status,
+      expectedHash: state.hashes[task.area]
+    });
+    state.tasks = result.tasks;
+    state.hashes = result.hashes;
+    state.repositoryPath = result.repositoryPath;
+    render();
+    showNotice(task.id + " movida a " + status + " y guardada en Markdown.", "success");
+  } catch (error) {
+    const message = error.message || String(error);
+    showNotice(message, error.code === "FILE_CHANGED" || message.includes("El Markdown cambió") ? "warning" : "error");
+  }
+}
 function makeCard(task) {
   const card = textNode("button", "", "task-card priority-" + task.priority.toLowerCase());
   card.type = "button";
+  card.draggable = true;
+  card.title = "Arrastra a otro estado o pulsa para editar";
   card.setAttribute("aria-label", "Editar " + task.id + ": " + task.title);
   const top = textNode("div", "", "card-top");
   top.append(textNode("span", task.id, "task-id"), textNode("span", task.priority, "priority-pill"));
@@ -175,7 +223,22 @@ function makeCard(task) {
     meta.append(due);
   }
   card.append(meta);
-  card.addEventListener("click", () => openEdit(task));
+  card.addEventListener("dragstart", event => {
+    draggedTask = { id: task.id, area: task.area };
+    suppressNextClick = true;
+    card.classList.add("is-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", JSON.stringify(draggedTask));
+  });
+  card.addEventListener("dragend", () => {
+    card.classList.remove("is-dragging");
+    document.querySelectorAll(".column.drop-target").forEach(column => column.classList.remove("drop-target"));
+    setTimeout(() => { suppressNextClick = false; draggedTask = null; }, 150);
+  });
+  card.addEventListener("click", () => {
+    if (suppressNextClick) { suppressNextClick = false; return; }
+    openEdit(task);
+  });
   return card;
 }
 function setView(view) {

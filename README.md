@@ -16,6 +16,7 @@ La ruta elegida se guarda en la configuración local de Electron, fuera del repo
 
 - Lee las tareas de areas/finanzas, areas/titan13, areas/negocios y areas/personal.
 - Incluye tablero por estado y calendario mensual con pequeñas etiquetas en las fechas límite.
+- Permite arrastrar tarjetas entre estados; cada movimiento se guarda en Markdown.
 - Las tareas sin fecha aparecen en una lista separada dentro del calendario; la aplicación no inventa fechas.
 - Incluye tema claro/oscuro y recuerda la elección localmente.
 - Permite añadir tareas con prioridad P0–P3 y fecha límite opcional.
