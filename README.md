@@ -1,6 +1,6 @@
 # Tareas — aplicación de escritorio
 
-Aplicación de escritorio local basada en Electron. Lee y actualiza los Markdown existentes del repositorio Tareas; no necesita Obsidian ni Codex para funcionar. Obsidian se usó como referencia de interfaz y de organización en vistas, después del análisis estático ya realizado. REA no forma parte del flujo de desarrollo de esta app.
+Aplicación de escritorio local basada en Electron. Lee y actualiza los Markdown existentes del repositorio Tareas; no necesita Obsidian ni Codex para funcionar. Obsidian se usó como referencia de interfaz y organización después del análisis estático ya realizado. REA no forma parte del flujo de desarrollo de esta app.
 
 ## Ejecutarla
 
@@ -15,7 +15,9 @@ La ruta elegida se guarda en la configuración local de Electron, fuera del repo
 ## Prototipo actual
 
 - Lee las tareas de areas/finanzas, areas/titan13, areas/negocios y areas/personal.
-- Visualiza tareas en columnas Pendientes, En curso, En espera y Completadas.
+- Incluye tablero por estado y calendario mensual con pequeñas etiquetas en las fechas límite.
+- Las tareas sin fecha aparecen en una lista separada dentro del calendario; la aplicación no inventa fechas.
+- Incluye tema claro/oscuro y recuerda la elección localmente.
 - Permite añadir tareas con prioridad P0–P3 y fecha límite opcional.
 - Permite editar descripción, prioridad, fecha y estado desde las tarjetas. El área queda fija para conservar el identificador asignado.
 - Escribe los cambios en el archivo tareas.md del área correspondiente, conserva los identificadores y el resto del Markdown, y detecta si el archivo cambió desde que se cargó.
