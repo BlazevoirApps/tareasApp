@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <title>Tareas</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">T</span><div><strong>Tareas</strong><small>Organización personal</small></div></div>
+      <div class="side-label">VISTAS</div>
+      <button class="nav-item selected" id="nav-board"><span class="nav-icon">▦</span> Tablero</button>
+      <div class="sidebar-bottom">
+        <div class="repo-label">REPOSITORIO LOCAL</div>
+        <div class="repo-path" id="repo-path">Buscando la carpeta Tareas…</div>
+        <button class="button button-muted button-full" id="choose-repo">Elegir carpeta Markdown</button>
+        <div class="sync-note">Los cambios se guardan directamente en los archivos Markdown.</div>
+      </div>
+    </aside>
+    <main class="main-area">
+      <header class="topbar">
+        <div><div class="eyebrow">TU ESPACIO DE TRABAJO</div><h1>Tablero</h1></div>
+        <div class="top-actions">
+          <label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="Buscar tareas"></label>
+          <button class="button button-muted" id="refresh">↻ <span>Actualizar</span></button>
+          <button class="button button-primary" id="add-task">＋ <span>Nueva tarea</span></button>
+        </div>
+      </header>
+      <section class="notice" id="notice" hidden></section>
+      <section class="summary" id="summary"></section>
+      <section class="filters">
+        <div class="filter-left"><label for="area-filter">Área</label><select id="area-filter"></select></div>
+        <div class="priority-legend"><span><i class="dot p0"></i>P0 Crítica</span><span><i class="dot p1"></i>P1 Alta</span><span><i class="dot p2"></i>P2 Normal</span><span><i class="dot p3"></i>P3 Baja</span></div>
+      </section>
+      <section class="board" id="board" aria-live="polite"></section>
+      <footer class="footer"><span id="task-count"></span><span>Markdown local · sin nube</span></footer>
+    </main>
+  </div>
+  <dialog id="task-dialog">
+    <form id="task-form">
+      <div class="dialog-header"><div><div class="eyebrow" id="dialog-kicker">AÑADIR AL TABLERO</div><h2 id="dialog-title">Nueva tarea</h2></div><button type="button" class="icon-button" id="close-dialog" aria-label="Cerrar">×</button></div>
+      <input id="task-id" type="hidden">
+      <label class="field-label" for="task-title">Descripción</label>
+      <input id="task-title" class="field" type="text" maxlength="240" required placeholder="¿Qué hay que hacer?">
+      <div class="field-row">
+        <div><label class="field-label" for="task-area">Área</label><select id="task-area" class="field"></select></div>
+        <div><label class="field-label" for="task-priority">Prioridad</label><select id="task-priority" class="field"><option value="P0">P0 · Crítica</option><option value="P1">P1 · Alta</option><option value="P2" selected>P2 · Normal</option><option value="P3">P3 · Baja</option></select></div>
+      </div>
+      <div class="field-row">
+        <div><label class="field-label" for="task-due">Fecha límite</label><input id="task-due" class="field" type="date"></div>
+        <div><label class="field-label" for="task-status">Estado</label><select id="task-status" class="field"><option>Pendientes</option><option>En curso</option><option>En espera</option><option>Completadas</option></select></div>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button button-muted" id="cancel-dialog">Cancelar</button><button type="submit" class="button button-primary" id="save-task">Guardar tarea</button></div>
+    </form>
+  </dialog>
+  <script src="renderer.js"></script>
+</body>
+</html>
