@@ -3,3 +3,5 @@ body[data-theme="dark"]{background:#141821;color:#e6eaf2}body[data-theme="dark"]
 [hidden]{display:none!important}body[data-theme="dark"] input[type="date"]{color-scheme:dark}
 
 body[data-theme="dark"] .interaction-hint{color:#929bad}body[data-theme="dark"] .column.drop-target{background:#263459;outline-color:#8aa4ff}
+
+body[data-theme="dark"] .calendar-shortcut{color:#929bad}body[data-theme="dark"] .calendar-day.drop-date-target{background:#29395f;box-shadow:inset 0 0 0 2px #8aa4ff}

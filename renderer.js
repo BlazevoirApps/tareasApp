@@ -139,6 +139,42 @@ function renderBoard(tasks) {
     board.append(column);
   }
 }
+function bindTaskDrag(element, task) {
+  element.draggable = true;
+  element.addEventListener("dragstart", event => {
+    draggedTask = { id: task.id, area: task.area };
+    suppressNextClick = true;
+    element.classList.add("is-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", JSON.stringify(draggedTask));
+  });
+  element.addEventListener("dragend", () => {
+    element.classList.remove("is-dragging");
+    document.querySelectorAll(".calendar-day.drop-date-target, .column.drop-target")
+      .forEach(target => target.classList.remove("drop-date-target", "drop-target"));
+    setTimeout(() => { suppressNextClick = false; draggedTask = null; }, 150);
+  });
+}
+function bindCalendarDateDrop(cell, date) {
+  cell.addEventListener("dragover", event => {
+    if (!draggedTask) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    cell.classList.add("drop-date-target");
+  });
+  cell.addEventListener("dragleave", event => {
+    if (!cell.contains(event.relatedTarget)) cell.classList.remove("drop-date-target");
+  });
+  cell.addEventListener("drop", event => {
+    event.preventDefault();
+    cell.classList.remove("drop-date-target");
+    let payload = draggedTask;
+    try { payload = JSON.parse(event.dataTransfer.getData("text/plain")); } catch {}
+    const task = state.tasks.find(item => item.id === payload?.id && item.area === payload?.area);
+    draggedTask = null;
+    if (task) void setTaskDueDate(task, date);
+  });
+}
 function renderCalendar(tasks) {
   const year = state.month.getFullYear();
   const month = state.month.getMonth();
@@ -154,6 +190,7 @@ function renderCalendar(tasks) {
     const date = new Date(year, month, index - offset + 1);
     const key = localDate(date);
     const cell = textNode("div", "", "calendar-day");
+    bindCalendarDateDrop(cell, key);
     if (date.getMonth() !== month) cell.classList.add("outside-month");
     if (key === today) cell.classList.add("today");
     const head = textNode("div", "", "calendar-day-head");
@@ -164,9 +201,10 @@ function renderCalendar(tasks) {
     for (const task of dayTasks) {
       const event = textNode("button", "", "calendar-event priority-" + task.priority.toLowerCase() + (task.status === "Completadas" ? " is-completed" : ""));
       event.type = "button";
+      bindTaskDrag(event, task);
       event.title = task.id + " · " + task.title;
       event.append(textNode("span", "", "calendar-event-dot"), textNode("span", task.title, "calendar-event-title"));
-      event.addEventListener("click", () => openEdit(task));
+      event.addEventListener("click", () => { if (suppressNextClick) { suppressNextClick = false; return; } openEdit(task); });
       cell.append(event);
     }
     grid.append(cell);
@@ -180,9 +218,32 @@ function renderCalendar(tasks) {
   for (const task of noDate) {
     const tag = textNode("button", "", "undated-task priority-" + task.priority.toLowerCase() + (task.status === "Completadas" ? " is-completed" : ""));
     tag.type = "button";
+    bindTaskDrag(tag, task);
     tag.append(textNode("span", task.id, "undated-id"), textNode("span", task.title, "undated-title"), textNode("span", task.areaName, "undated-area"));
-    tag.addEventListener("click", () => openEdit(task));
+    tag.addEventListener("click", () => { if (suppressNextClick) { suppressNextClick = false; return; } openEdit(task); });
     undated.append(tag);
+  }
+}
+async function setTaskDueDate(task, due) {
+  if (task.due === due) return;
+  try {
+    const result = await window.tareasApp.updateTask({
+      id: task.id,
+      title: task.title,
+      area: task.area,
+      priority: task.priority,
+      due,
+      status: task.status,
+      expectedHash: state.hashes[task.area]
+    });
+    state.tasks = result.tasks;
+    state.hashes = result.hashes;
+    state.repositoryPath = result.repositoryPath;
+    render();
+    showNotice("Fecha límite de " + task.id + " actualizada a " + due + " en Markdown.", "success");
+  } catch (error) {
+    const message = error.message || String(error);
+    showNotice(message, error.code === "FILE_CHANGED" || message.includes("El Markdown cambió") ? "warning" : "error");
   }
 }
 async function moveTask(task, status) {
