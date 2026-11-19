@@ -7,6 +7,7 @@ const crypto = require("node:crypto");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 const execFileAsync = promisify(execFile);
+let gitExecutable;
 
 const AREAS = [
   { slug: "finanzas", name: "Finanzas", prefix: "FIN" },
@@ -213,7 +214,8 @@ function updateTask(input) { return withMutation(() => updateTaskImpl(input)); }
 async function runGit(args) {
   if (!settings.repositoryPath) throw new Error("Selecciona primero la carpeta local del repositorio Tareas.");
   try {
-    const result = await execFileAsync("git", args, {
+    const executable = await resolveGitExecutable();
+    const result = await execFileAsync(executable, args, {
       cwd: settings.repositoryPath,
       windowsHide: true,
       encoding: "utf8",
@@ -221,9 +223,34 @@ async function runGit(args) {
     });
     return { stdout: result.stdout.trim(), stderr: result.stderr.trim() };
   } catch (error) {
+    if (error.code === "GIT_NOT_FOUND") throw error;
     const detail = String(error.stderr || error.message || "fallo de Git").trim();
     throw new Error("Git: " + detail);
   }
+}
+async function resolveGitExecutable() {
+  if (gitExecutable) return gitExecutable;
+  const envPath = process.env.TAREAS_GIT_PATH;
+  const pathValue = process.env.PATH || process.env.Path || "";
+  const candidates = [
+    ...(envPath ? [envPath] : []),
+    ...pathValue.split(path.delimiter).filter(Boolean).map(directory => path.join(directory, process.platform === "win32" ? "git.exe" : "git")),
+    ...(process.platform === "win32" ? [
+      path.join(process.env.ProgramFiles || "C:\\Program Files", "Git", "cmd", "git.exe"),
+      path.join(process.env.ProgramFiles || "C:\\Program Files", "Git", "bin", "git.exe"),
+      path.join(process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)", "Git", "cmd", "git.exe"),
+      path.join(process.env.LOCALAPPDATA || "", "Programs", "Git", "cmd", "git.exe")
+    ] : [])
+  ];
+  for (const candidate of candidates) {
+    if (candidate && path.isAbsolute(candidate) && await fs.access(candidate).then(() => true, () => false)) {
+      gitExecutable = candidate;
+      return gitExecutable;
+    }
+  }
+  const error = new Error("No encuentro Git. Instala Git for Windows y vuelve a abrir TareasApp. Si Git está instalado en una ruta personalizada, define TAREAS_GIT_PATH con la ruta completa a git.exe.");
+  error.code = "GIT_NOT_FOUND";
+  throw error;
 }
 function parseGitStatus(raw) {
   return raw.split(/\r?\n/).filter(Boolean).map(line => ({

@@ -4,7 +4,7 @@ Aplicación de escritorio local basada en Electron. Lee y actualiza los Markdown
 
 ## Ejecutarla
 
-Requiere Node.js 24.22.2 o posterior de la rama 24 y npm.
+Requiere Node.js 24.22.2 o posterior de la rama 24, npm y Git instalado en el ordenador. La app localiza Git mediante `PATH` y rutas habituales de Git for Windows. Si usas una instalación personalizada, define `TAREAS_GIT_PATH` con la ruta completa a `git.exe` antes de abrir la app.
 
 1. Ejecuta npm install una sola vez.
 2. Abre abrir-tareas.bat, o ejecuta npm start desde una terminal.
