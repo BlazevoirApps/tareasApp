@@ -20,7 +20,11 @@
         <div class="repo-label">REPOSITORIO LOCAL</div>
         <div class="repo-path" id="repo-path">Buscando la carpeta Tareas…</div>
         <button class="button button-muted button-full" id="choose-repo">Elegir carpeta Markdown</button>
-        <div class="sync-note">Los cambios se guardan directamente en los archivos Markdown.</div>
+        <div class="sync-actions">
+          <button class="button button-muted" id="pull-changes" title="Traer cambios remotos">↓ Pullear</button>
+          <button class="button button-primary" id="push-changes" title="Publicar tareas locales">↑ Pushear</button>
+        </div>
+        <div class="sync-note">Las tareas se guardan en Markdown. Pullear y Pushear sincronizan con GitHub.</div>
       </div>
     </aside>
     <main class="main-area">

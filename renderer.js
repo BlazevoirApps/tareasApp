@@ -358,6 +358,33 @@ async function chooseRepository() {
     showNotice(error.message || String(error), "error");
   }
 }
+async function synchronizeTasks(direction) {
+  if (dialog.open) {
+    showNotice("Guarda o cierra la tarea abierta antes de sincronizar.", "warning");
+    return;
+  }
+  const pullButton = $("#pull-changes");
+  const pushButton = $("#push-changes");
+  if (pullButton.disabled || pushButton.disabled) return;
+  pullButton.disabled = true;
+  pushButton.disabled = true;
+  showNotice(direction === "pull" ? "Pullear: comprobando GitHub..." : "Pushear: preparando el commit de tareas...", "info");
+  try {
+    const result = direction === "pull"
+      ? await window.tareasApp.pullTaskChanges()
+      : await window.tareasApp.pushTaskChanges();
+    state.tasks = result.tasks;
+    state.hashes = result.hashes;
+    state.repositoryPath = result.repositoryPath;
+    render();
+    showNotice(result.message, "success");
+  } catch (error) {
+    showNotice(error.message || String(error), "warning");
+  } finally {
+    pullButton.disabled = false;
+    pushButton.disabled = false;
+  }
+}
 form.addEventListener("submit", async event => {
   event.preventDefault();
   const id = $("#task-id").value;
@@ -390,6 +417,8 @@ form.addEventListener("submit", async event => {
 });
 $("#add-task").addEventListener("click", openCreate);
 $("#choose-repo").addEventListener("click", chooseRepository);
+$("#pull-changes").addEventListener("click", () => void synchronizeTasks("pull"));
+$("#push-changes").addEventListener("click", () => void synchronizeTasks("push"));
 $("#refresh").addEventListener("click", refresh);
 
 $("#close-dialog").addEventListener("click", () => dialog.close());

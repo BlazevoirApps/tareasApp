@@ -4,6 +4,9 @@ const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
+const execFileAsync = promisify(execFile);
 
 const AREAS = [
   { slug: "finanzas", name: "Finanzas", prefix: "FIN" },
@@ -13,8 +16,11 @@ const AREAS = [
 ];
 const STATUSES = ["Pendientes", "En curso", "En espera", "Completadas"];
 const PRIORITIES = ["P0", "P1", "P2", "P3"];
+const TASK_FILE_PATHS = new Set(AREAS.map(area => "areas/" + area.slug + "/tareas.md"));
 const CONFIG_FILE = () => path.join(app.getPath("userData"), "settings.json");
 let settings = { repositoryPath: "" };
+let syncInProgress = false;
+let activeMutations = 0;
 
 function digest(text) {
   return crypto.createHash("sha256").update(text, "utf8").digest("hex");
@@ -137,7 +143,7 @@ async function assertExpected(current, expectedHash) {
     throw error;
   }
 }
-async function createTask(input) {
+async function createTaskImpl(input) {
   const area = areaFor(input.area);
   const values = validateTaskInput(input);
   const { file, text, hash } = await readArea(area);
@@ -151,7 +157,7 @@ async function createTask(input) {
   await writeSafely(file, updated);
   return loadTasks();
 }
-async function updateTask(input) {
+async function updateTaskImpl(input) {
   const area = areaFor(input.area);
   const values = validateTaskInput(input);
   const { file, text } = await readArea(area);
@@ -195,6 +201,125 @@ async function loadSettings() {
     } catch {}
   }
 }
+async function withMutation(action) {
+  if (syncInProgress) throw new Error("La sincronización está en curso. Espera a que termine.");
+  activeMutations += 1;
+  try { return await action(); }
+  finally { activeMutations -= 1; }
+}
+function createTask(input) { return withMutation(() => createTaskImpl(input)); }
+function updateTask(input) { return withMutation(() => updateTaskImpl(input)); }
+
+async function runGit(args) {
+  if (!settings.repositoryPath) throw new Error("Selecciona primero la carpeta local del repositorio Tareas.");
+  try {
+    const result = await execFileAsync("git", args, {
+      cwd: settings.repositoryPath,
+      windowsHide: true,
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024
+    });
+    return { stdout: result.stdout.trim(), stderr: result.stderr.trim() };
+  } catch (error) {
+    const detail = String(error.stderr || error.message || "fallo de Git").trim();
+    throw new Error("Git: " + detail);
+  }
+}
+function parseGitStatus(raw) {
+  return raw.split(/\r?\n/).filter(Boolean).map(line => ({
+    code: line.slice(0, 2),
+    path: line.slice(3).trim()
+  }));
+}
+function assertOnlyTaskChanges(entries) {
+  const unsafe = entries.filter(entry => !TASK_FILE_PATHS.has(entry.path) || /[DR]/.test(entry.code));
+  if (unsafe.length) {
+    throw new Error("Hay cambios ajenos a los archivos tareas.md o archivos eliminados/renombrados. No los tocaré; revísalos manualmente.");
+  }
+}
+async function getGitStatus() {
+  const result = await runGit(["status", "--porcelain=v1", "--untracked-files=all"]);
+  return parseGitStatus(result.stdout);
+}
+async function getUpstreamState() {
+  const upstream = (await runGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])).stdout;
+  const result = await runGit(["rev-list", "--left-right", "--count", "HEAD..." + upstream]);
+  const [ahead, behind] = result.stdout.split(/\s+/).map(Number);
+  return { upstream, ahead: ahead || 0, behind: behind || 0 };
+}
+async function changedFiles(range) {
+  const result = await runGit(["diff", "--name-only", range]);
+  return result.stdout ? result.stdout.split(/\r?\n/).filter(Boolean) : [];
+}
+async function pullTaskChanges() {
+  if (syncInProgress) throw new Error("Ya hay una sincronización en curso.");
+  if (activeMutations) throw new Error("Espera a que termine de guardarse la tarea antes de sincronizar.");
+  syncInProgress = true;
+  try {
+    const initial = await getGitStatus();
+    if (initial.length) throw new Error("Hay cambios locales sin sincronizar. Pullear no los sobrescribirá; pushea o revisa esos cambios primero.");
+    await runGit(["fetch", "origin"]);
+    const state = await getUpstreamState();
+    if (state.ahead && state.behind) throw new Error("La rama local y la remota han divergido. No se integró nada; conserva ambos lados y resuelve la divergencia manualmente.");
+    if (state.ahead) throw new Error("Hay commits locales por publicar. Usa Pushear cambios antes de pullear.");
+    if (!state.behind) {
+      return { ...(await loadTasks()), message: "Las tareas ya están actualizadas." };
+    }
+    await runGit(["merge", "--ff-only", state.upstream]);
+    return { ...(await loadTasks()), message: "Cambios remotos descargados e integrados." };
+  } finally {
+    syncInProgress = false;
+  }
+}
+async function pushTaskChanges() {
+  if (syncInProgress) throw new Error("Ya hay una sincronización en curso.");
+  if (activeMutations) throw new Error("Espera a que termine de guardarse la tarea antes de sincronizar.");
+  syncInProgress = true;
+  try {
+    const status = await getGitStatus();
+    assertOnlyTaskChanges(status);
+    const staged = await runGit(["diff", "--cached", "--name-only"]);
+    if (staged.stdout) throw new Error("Hay cambios ya preparados en Git. No los incluiré en el push de tareas; revísalos primero.");
+    await runGit(["fetch", "origin"]);
+    let state = await getUpstreamState();
+    if (state.behind) {
+      if (state.ahead) throw new Error("La rama local y la remota han divergido. No se publicó nada; primero resuelve la divergencia sin forzar el push.");
+      throw new Error("GitHub tiene cambios nuevos. Pullea los cambios y revisa el estado antes de volver a pushear.");
+    }
+    if (state.ahead) {
+      const committed = await changedFiles(state.upstream + "..HEAD");
+      if (committed.some(file => !TASK_FILE_PATHS.has(file))) {
+        throw new Error("Hay commits locales con archivos ajenos a tareas.md. No los subiré desde esta opción.");
+      }
+    }
+    if (status.length) {
+      const paths = [...new Set(status.map(entry => entry.path))];
+      await runGit(["add", "--", ...paths]);
+      const stagedAfterAdd = await runGit(["diff", "--cached", "--name-only"]);
+      const stagedPaths = stagedAfterAdd.stdout ? stagedAfterAdd.stdout.split(/\r?\n/).filter(Boolean) : [];
+      if (stagedPaths.some(file => !TASK_FILE_PATHS.has(file))) {
+        throw new Error("El área de preparación contiene archivos ajenos a tareas.md. No se creó el commit.");
+      }
+      if (stagedPaths.length) {
+        const date = new Intl.DateTimeFormat("sv-SE", {
+          timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit"
+        }).format(new Date());
+        await runGit(["commit", "-m", "Update tasks " + date]);
+      }
+    }
+    const remaining = await getGitStatus();
+    if (remaining.length) throw new Error("Aparecieron cambios nuevos durante la sincronización. El commit local se conserva; revisa el estado antes de volver a pushear.");
+    state = await getUpstreamState();
+    if (state.behind) throw new Error("GitHub avanzó durante la operación. El commit local se conserva; pullea y revisa antes de reintentar.");
+    if (!state.ahead) {
+      return { ...(await loadTasks()), message: "No hay cambios de tareas nuevos que publicar." };
+    }
+    await runGit(["push"]);
+    return { ...(await loadTasks()), message: "Cambios de tareas publicados en GitHub." };
+  } finally {
+    syncInProgress = false;
+  }
+}
 function createWindow() {
   const win = new BrowserWindow({
     width: 1320,
@@ -217,6 +342,8 @@ app.whenReady().then(async () => {
   await loadSettings();
   ipcMain.handle("tasks:load", loadTasks);
   ipcMain.handle("repository:choose", chooseRepository);
+  ipcMain.handle("repository:pull-tasks", pullTaskChanges);
+  ipcMain.handle("repository:push-tasks", pushTaskChanges);
   ipcMain.handle("tasks:create", (_event, input) => createTask(input));
   ipcMain.handle("tasks:update", (_event, input) => updateTask(input));
   createWindow();

@@ -22,7 +22,9 @@ La ruta elegida se guarda en la configuración local de Electron, fuera del repo
 - Permite añadir tareas con prioridad P0–P3 y fecha límite opcional.
 - Permite editar descripción, prioridad, fecha y estado desde las tarjetas. El área queda fija para conservar el identificador asignado.
 - Escribe los cambios en el archivo tareas.md del área correspondiente, conserva los identificadores y el resto del Markdown, y detecta si el archivo cambió desde que se cargó.
-- No sincroniza Git todavía. La sincronización mediante acciones separadas Pullear/Pushear será una funcionalidad posterior.
+- Pullear descarga los cambios remotos solo si el árbol local está limpio y la integración puede avanzar por fast-forward.
+- Pushear prepara y crea un commit solo con archivos areas/*/tareas.md modificados y hace push normal; nunca usa push --force.
+- Si hay archivos ajenos modificados, cambios ya preparados, conflictos o GitHub avanzó, la app se detiene y conserva los cambios.
 
 ## Formato Markdown
 
